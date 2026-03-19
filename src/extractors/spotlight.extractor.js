@@ -8,68 +8,78 @@ async function extractSpotlights() {
     const $ = cheerio.load(resp.data);
 
     const slideElements = $(
-      "div.deslide-wrap > div.container > div#slider > div.swiper-wrapper > div.swiper-slide:not(.swiper-slide-duplicate)"
+      "div.deslide-wrap > div.container > div#slider > div.swiper-wrapper > div.swiper-slide"
     );
 
     const promises = slideElements
       .map(async (ind, ele) => {
         const poster = $(ele)
-          .find("div.deslide-cover div.deslide-cover-img img.film-poster-img")
+          .find(
+            "div.deslide-item > div.deslide-cover > div.deslide-cover-img > img.film-poster-img"
+          )
           .attr("data-src");
-
-        const titleEl = $(ele).find("div.deslide-item-content div.desi-head-title");
-        const title = titleEl.text().trim();
-        const japanese_title = titleEl.attr("data-jname")?.trim() ?? "";
-
+        const title = $(ele)
+          .find(
+            "div.deslide-item > div.deslide-item-content > div.desi-head-title"
+          )
+          .text()
+          .trim();
+        const japanese_title = $(ele)
+          .find(
+            "div.deslide-item > div.deslide-item-content > div.desi-head-title"
+          )
+          .attr("data-jname")
+          .trim();
         const description = $(ele)
-          .find("div.deslide-item-content div.desi-description")
+          .find(
+            "div.deslide-item > div.deslide-item-content > div.desi-description"
+          )
           .text()
           .trim();
-
-        const watchHref = $(ele)
-          .find(".desi-buttons > a:eq(0)")
-          .attr("href") ?? "";
-
-        const id = watchHref.replace("/watch/", "");
-        const data_id = id.split("-").pop();
-
-        // --- tvInfo ---
-        const tvInfo = {};
-
-        // showType — plain text of first scd-item (strip icon text)
-        tvInfo.showType = $(ele)
-          .find("div.sc-detail div.scd-item:eq(0)")
-          .text()
-          .trim()
-          .replace(/\s+/g, " ");
-
-        // duration — second scd-item
-        tvInfo.duration = $(ele)
-          .find("div.sc-detail div.scd-item:eq(1)")
-          .text()
-          .trim()
-          .replace(/\s+/g, " ");
-
-        // releaseDate — third scd-item
-        tvInfo.releaseDate = $(ele)
-          .find("div.sc-detail div.scd-item:eq(2)")
-          .text()
-          .trim()
-          .replace(/\s+/g, " ");
-
-        // quality — read directly from <span class="quality">
-        tvInfo.quality = $(ele)
-          .find("div.sc-detail span.quality")
-          .text()
-          .trim();
-
-        // episodeInfo — read from .tick-sub and .tick-dub
-        const tickContainer = $(ele).find("div.sc-detail .tick");
-        tvInfo.episodeInfo = {
-          sub: tickContainer.find(".tick-sub").text().trim().replace(/\D/g, ""),
-          dub: tickContainer.find(".tick-dub").text().trim().replace(/\D/g, ""),
+        const id = $(ele)
+          .find(
+            ".deslide-item > .deslide-item-content > .desi-buttons > a:eq(0)"
+          )
+          .attr("href")
+          .split("/")
+          .pop();
+        const data_id = $(ele)
+          .find(
+            ".deslide-item > .deslide-item-content > .desi-buttons > a:eq(0)"
+          )
+          .attr("href")
+          .split("/")
+          .pop()
+          .split("-")
+          .pop();
+        const tvInfoMapping = {
+          0: "showType",
+          1: "duration",
+          2: "releaseDate",
+          3: "quality",
+          4: "episodeInfo",
         };
 
+        const tvInfo = {};
+
+        await Promise.all(
+          $(ele)
+            .find("div.sc-detail > div.scd-item")
+            .map(async (index, element) => {
+              const key = tvInfoMapping[index];
+              let value = $(element).text().trim().replace(/\n/g, "");
+
+              const tickContainer = $(element).find(".tick");
+
+              if (tickContainer.length > 0) {
+                value = {
+                  sub: tickContainer.find(".tick-sub").text().trim(),
+                  dub: tickContainer.find(".tick-dub").text().trim(),
+                };
+              }
+              tvInfo[key] = value;
+            })
+        );
         return {
           id,
           data_id,
